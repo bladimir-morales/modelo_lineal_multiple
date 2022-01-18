@@ -1,0 +1,288 @@
+---
+title: "Modelo Lineal Múltiple"
+author: "Bladimir Morales Torrez"
+date: "6/1/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(tidyverse)
+library(MASS)
+library(normtest)
+library(gridExtra)
+library(lmtest)
+```
+La primera base de datos fue descargada del siguiente enlace (https://databank.bancomundial.org/indicator/SP.DYN.LE00.IN/1ff4a498/Popular-Indicators)
+
+```{r}
+bd<-read_xlsx("./data/indicadores_poblacion.xlsx",sheet = "Data") %>% 
+  dplyr::select(-"2019") %>% 
+  pivot_wider(names_from = variable,values_from = "2018") %>% 
+  dplyr::select(pais,codigo,
+                crecimiento_pib="Crecimiento del PIB (% anual)",
+                crecimiento_pob="Crecimiento de la población (% anual)",
+                superficie="Superficie (kilómetros cuadrados)",
+                esp_vida="Esperanza de vida al nacer, total (años)",
+                tasa_fertilidad="Tasa de fertilidad, total (nacimientos por cada mujer)",
+                tasa_educacion_primaria="Tasa de finalización de la educación de nivel primario, total (% del grupo etario correspondiente)",
+                #poblacion="Población, total",
+                co2="Emisiones de CO2 (toneladas métricas per cápita)",
+                #deuda_externa="Deuda externa acumulada, total (DOD, US$ a precios actuales)",
+                inversion_extranjera="Inversión extranjera directa, neta (balanza de pagos, US$ a precios actuales)"
+                )
+
+bd1<-read_xlsx("./data/salud_poblacion.xlsx",sheet = "Data") %>% 
+  dplyr::select(-"2019") %>% 
+  pivot_wider(names_from = variable,values_from = "2018") %>% 
+  dplyr::select(pais,codigo,
+                consumo_energia_renovable="Consumo de energía renovable (% del consumo total de energía final)",
+                desempleo="Desempleo, total (% de la población activa total) (estimación modelado OIT)",
+                inscripcion_secundaria="Inscripción escolar, nivel secundario (% bruto)",
+                internet="Personas que usan Internet (% de la población)",
+                acceso_electricidad="Acceso a la electricidad (% de población)",
+                publicacion_cientifica="Artículos en publicaciones científicas y técnicas",
+                muertes_infantiles="Número de muertes infantiles",
+                telefonia="Suscripciones a telefonía fija",
+                celular="Suscripciones a telefonía celular móvil",
+                banda_ancha="Suscripciones a banda ancha fija")
+
+bd_fin<-inner_join(bd,bd1) %>% 
+  filter_if(is.numeric,all_vars(!is.na(.)))
+
+
+
+cov(bd_fin[,3:10])
+cor(bd_fin[,3:20])
+plot(bd_fin[,3:20])
+
+
+modelo_pib<-lm(crecimiento_pib~crecimiento_pob+superficie+esp_vida+tasa_fertilidad+
+                 tasa_educacion_primaria+co2+inversion_extranjera+consumo_energia_renovable+
+                 desempleo+inscripcion_secundaria+internet+acceso_electricidad+publicacion_cientifica+
+                 muertes_infantiles+telefonia+celular+banda_ancha,data=bd_fin)
+
+summary(modelo_pib)
+
+anova(modelo_pib)
+
+stepAIC(modelo_pib)
+
+modelo_pib_ajus<-lm(crecimiento_pib~esp_vida+co2+consumo_energia_renovable+desempleo+publicacion_cientifica+telefonia,data=bd_fin)
+
+summary(modelo_pib_ajus)
+
+####################
+modelo_pob<-lm(crecimiento_pob~crecimiento_pib+superficie+esp_vida+tasa_fertilidad+
+                 tasa_educacion_primaria+co2+inversion_extranjera+consumo_energia_renovable+
+                 desempleo+inscripcion_secundaria+internet+acceso_electricidad+publicacion_cientifica+
+                 muertes_infantiles+telefonia+celular+banda_ancha,data=bd_fin)
+
+summary(modelo_pob)
+
+anova(modelo_pob)
+
+stepAIC(modelo_pob)
+
+modelo_pob_ajus<-lm(crecimiento_pib~esp_vida+tasa_fertilidad+inversion_extranjera+consumo_energia_renovable+internet+acceso_electricidad+publicacion_cientifica+celular,data=bd_fin)
+
+summary(modelo_pob_ajus)
+
+
+
+
+#library(MASS)
+
+#stepAIC
+stepAIC(modelo)
+```
+
+
+
+```{r}
+bd<-read_xlsx("./data/agricultura.xlsx",sheet = "Data") %>% 
+  dplyr::select(pais,codigo,variable,"2016") %>% 
+  pivot_wider(names_from = variable,values_from = "2017")
+
+bd_agricultura<-bd %>% 
+  filter(!codigo %in% c("CHN","USA","IND","BRA") ) %>% 
+  dplyr::select(pais,codigo,
+                esp_vida="Esperanza de vida al nacer, total (años)",
+                alfabetizacion="Tasa de alfabetización, total de adultos (% de personas de 15 años o más)",
+                crecimiento_pob="Crecimiento de la población (% anual)",
+                agricultura="Agricultura, valor agregado (% del crecimiento anual)",
+                precipitaciones="Promedio detallado de precipitaciones (mm anuales)",
+                acceso_electricidad="Acceso a la electricidad (% de población)",
+                superficie="Área de tierra (kilómetros cuadrados)",
+                consumo_fertilizantes="Consumo de fertilizantes (kilogramos por hectárea de tierras cultivables)",
+                #crecimiento_pob="Crecimiento de la población (% anual)",
+                gas_metano="Emisiones agrícolas de gas metano (miles de toneladas métricas de equivalente de CO2)",
+                oxido_nitroso="Emisiones de óxido nitroso (miles de toneladas métricas de equivalente de CO2)",
+                co2="Emisiones de CO2 (kt)",
+                
+                expo_alimentos="Exportaciones de alimentos (% de exportaciones de mercaderías)",
+                #poblacion="Población, total",
+                tierra_agricola="Tierras agrícolas (kilómetros cuadrados)",
+                tierra_cultivable="Tierras cultivables (hectáreas)") %>% 
+  filter_if(is.numeric,all_vars(!is.na(.)))
+
+plot(bd_agricultura[,3:14])
+cor(bd_agricultura[,3:14])
+
+modelo_agricultura<-lm(esp_vida~alfabetizacion+crecimiento_pob+agricultura+precipitaciones+
+                         acceso_electricidad+superficie+consumo_fertilizantes+gas_metano+
+                         oxido_nitroso+co2+expo_alimentos+tierra_agricola+
+                         tierra_cultivable,data = bd_agricultura)
+
+summary(modelo_agricultura)
+
+stepAIC(modelo_agricultura)
+```
+
+```{r}
+setwd("C:/Users/ACER/Documents/GitHub/modelo_lineal_multiple")
+
+bd_pob<-read_xlsx("./data/crecimiento_poblacion.xlsx",sheet = "Data") %>% 
+  dplyr::select(pais,codigo,variable,"2018") %>% 
+  pivot_wider(names_from = variable,values_from = "2018")
+
+bd_pob1<-bd_pob %>% 
+  filter(!codigo %in% c("KWT")) %>% 
+  dplyr::select(pais,codigo,
+                esp_vida="Esperanza de vida al nacer, total (años)",
+                mortalidad_varones="Tasa de mortalidad, adultos, varones (por cada 1.000 varones adultos)",
+                fertilidad="Tasa de fertilidad, total (nacimientos por cada mujer)",
+                superficie="Superficie (kilómetros cuadrados)",
+                mortalidad_mujeres="Tasa de mortalidad, adultos, mujeres (por cada 1.000 mujeres adultas)",
+                crecimiento_pib="Crecimiento del PIB (% anual)",
+                acceso_electricidad="Acceso a la electricidad (% de población)",
+                desempleo="Desempleo, total (% de la población activa total) (estimación modelado OIT)" ,
+                co2="Emisiones de CO2 (kt)",
+                metano="Emisiones de metano (kt de equivalente de CO2)",
+                oxido_nitroso="Emisiones de óxido nitroso (miles de toneladas métricas de equivalente de CO2)",
+                gasto_educacion="Gasto público en educación, total (% del PIB)",
+                ) %>% 
+  mutate(mortalidad=(mortalidad_varones+mortalidad_mujeres)/2) %>% 
+  dplyr::select(-mortalidad_varones,-mortalidad_mujeres) %>% 
+  filter_if(is.numeric,all_vars(!is.na(.)))
+```
+
+Se puede también observar 
+```{r}
+cor(bd_pob1[,3:ncol(bd_pob1)])
+
+bd_crecimiento_pob<-bd_pob1[,3:ncol(bd_pob1)]
+
+mod<-lm(esp_vida~.,data=bd_crecimiento_pob)
+
+summary(mod)
+stepAIC(mod)
+
+mod1<-lm(esp_vida ~ fertilidad + superficie + crecimiento_pib + metano + oxido_nitroso + 
+    gasto_educacion+mortalidad, data = bd_crecimiento_pob)
+
+summary(mod1)
+
+mod2<-lm(esp_vida ~ fertilidad + metano + gasto_educacion+mortalidad, data = bd_crecimiento_pob)
+summary(mod2)
+
+mod2<-lm(esp_vida ~ fertilidad + gasto_educacion + mortalidad, data = bd_crecimiento_pob)
+summary(mod2)
+
+anova(mod2)
+
+bd_mod<-bd_pob1 %>% 
+  dplyr::select(pais,codigo,esp_vida,fertilidad,gasto_educacion,mortalidad) %>% 
+  mutate(residuos=residuals(mod2),
+         residuos_student=rstudent(mod2),
+         ajustados=fitted(mod2))
+  
+#Análisis de residuos
+acf(bd_mod$residuos_student)
+pacf(bd_mod$residuos_student)
+
+#Normalidad
+par(mfrow=c(1,2))
+hist(bd_mod$residuos,main="Histograma de Residuos")
+hist(bd_mod$residuos_student,main="Histograma de Residuos Studentizados")
+
+
+grid.arrange(
+  ggplot(bd_mod)+
+    stat_qq(aes(sample=residuos))+
+    labs(title="Q-Q Plot (Residuos)",y="Residuos",x="Teóricos")
+  ,
+  ggplot(bd_mod)+
+    stat_qq(aes(sample=residuos_student))+
+    #geom_abline(color="blue")+
+    labs(title="Q-Q Plot (Residuos Studentizados)",y="Residuos Studentizados",x="Teóricos")
+  ,ncol=2
+)
+
+
+jb.norm.test(bd_mod$residuos)
+jb.norm.test(bd_mod$residuos_student)
+#No se recha Ho por lo tanto los residuos son normales
+
+#Multicolinealidad
+cor(bd_mod[,4:6])
+#regresiones auxiliares
+car::vif(mod2)
+
+mod_aux1<-lm(fertilidad ~ gasto_educacion+mortalidad,bd_mod)
+summary(mod_aux1)
+
+mod_aux2<-lm(gasto_educacion~ fertilidad +mortalidad ,bd_mod)
+summary(mod_aux2)
+
+mod_aux3<-lm(mortalidad~ fertilidad +gasto_educacion,bd_mod)
+summary(mod_aux3)
+
+
+r1<-summary(mod_aux1);1/(1-r1$r.squared)
+r2<-summary(mod_aux2);1/(1-r2$r.squared)
+r3<-summary(mod_aux3);1/(1-r3$r.squared)
+
+#Homocedasticidad
+grid.arrange(
+  ggplot(bd_mod,aes(ajustados,residuos))+
+    geom_point()
+  ,
+    ggplot(bd_mod,aes(ajustados,residuos_student))+
+    geom_point(),
+ncol=2)
+
+
+#Contraste de Breush Pagan
+mod_res<-lm(residuos^2~ fertilidad + gasto_educacion + mortalidad, data = bd_mod)
+
+estadistico<-nrow(bd_mod)*summary(mod_res)$r.squared
+valorp<-pchisq(estadistico,df=3,lower.tail = F)
+cbind(estadistico,valorp)
+
+bptest(mod2)
+#No se rechaza Ho así los residuos son homocedasticos
+
+#Autocorrelación}
+
+bd_mod %>% 
+ggplot(aes(x=c(1:nrow(.)),y=residuos))+
+  geom_point()+
+  #geom_line(color="blue")+
+  geom_hline(yintercept = 0)+
+  labs(title="Autocorrelación de Residuos",
+       y="Residuos",
+       x="Números ordenados")
+
+dwtest(mod2,alternative = "two.sided")
+bgtest(mod2)
+```
+
+```{r}
+
+```
+
+

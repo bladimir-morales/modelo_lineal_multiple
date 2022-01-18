@@ -1,0 +1,463 @@
+---
+title: "Modelo Lineal Múlitple"
+subtitle: "Trabajo 1: Modelos Lineales"
+author: "Bladimir Morales Torrez"
+date: "Enero 2022"
+output: 
+  pdf_document:
+    toc: true
+    number_sections: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(tidyverse)
+library(MASS)
+library(normtest)
+library(gridExtra)
+library(lmtest)
+```
+\newpage
+
+# Datos a ser estudiados
+
+En el presente trabajo se realizará un modelo de regresión lineal múltiple  que explique la variable de respuesta Esperanza de vida de los diferentes países del mundo y que estan registrados en el Banco Mundial, cabe mencionar que los datos fueron procesados antes de su utilización tomando en cuenta que hacen referencia al año 2018 y solo se tomo en cuenta los países que cuentan con la información tanto la variable de respuesta como las explicativas teniendo en total 120 países a nivel mundial que representarán la muestra para el desarrollo del modelo.
+
+La variable de respuesta es: 
+
+$Y=$Esperanza de vida al nacer, total (años).
+
+Las variables explicativas $X_i$ son:
+
+- Tasa de mortalidad, adultos (por cada 1.000 adultos)  
+- Tasa de fertilidad, total (nacimientos por cada mujer)  
+- Superficie (kilómetros cuadrados)  
+- Crecimiento del PIB (% anual)  
+- Acceso a la electricidad (% de población)  
+- Desempleo, total (% de la población activa total) (estimación modelado OIT)  
+- Emisiones de CO2 (kt)  
+- Emisiones de metano (kt de equivalente de CO2)  
+- Emisiones de óxido nitroso (miles de toneladas métricas de equivalente de CO2)  
+- Gasto público en educación, total (% del PIB)  
+
+La información fue obtenida del banco de datos que tiene el Banco Mundial y fue descargada del siguiente enlace (https://databank.bancomundial.org/source/world-development-indicators).
+
+Primero se realizará un análisis descriptivo de las variables en estudio, luego se estimará un modelo de regresión lineal múltiple encontrando el que mejor se ajuste discriminando covariables, para luego realizar el diagnóstico del modelo validando todos los supuestos del modelo, se realizará posteriormente la predicción de datos para que finalmente detallar las conclusiones.
+
+# Análisis descriptivo
+
+```{r eccho=F}
+bd_pob1<-read_xlsx("./data/bd_poblacion.xlsx") 
+bd_esp_vida<-bd_pob1[,3:ncol(bd_pob1)]
+```
+En primer lugar se visualizará el comportamiento de la variable respuesta Esperanza de vida al nacer mediante el histograma.
+
+```{r }
+hist(bd_esp_vida$esp_vida,main = "Histograma de la Esperanza de Vida",
+     xlab = "Esperanza de vida (años)",
+     ylab = "Frecuencia")
+```
+
+La esperanza de vida tiene los siguiente estadísticos:
+
+```{r}
+summary(bd_esp_vida$esp_vida)
+```
+
+La media de la esperanza de vida de todos los países en estudio es de 71 años aproximadamente, con un máximo de 83 y mínimo de 53 aproximadamente, lo cual se ve reflejado en el histograma de frecuencias donde la mayoría de los países tiene este indicador entre los 70 a 75 años de edad. 
+
+En el siguiente cuadro se se observa las correlaciones que tienen las variables en estudio.
+
+```{r }
+cor(bd_esp_vida)
+```
+Se puede observar que la variable de respuesta, cuenta con un alto grado de correlación con las variables de fertilidad, acceso_electricidad y mortalidad, lo cual se puede visualizar en el siguiente gráfico que explica la relación lineal que pueden tener las variables en estudio.
+
+```{r }
+plot(bd_esp_vida)
+```
+
+# Estimación
+
+En esta sección se estimará un modelo de regresión lineal clásico con las 10 covariables propuestas, donde la variable respuesta es la esperanza de vida, el fin será obtener un modelo óptimo el cual explique de mejor manera la variable $Y$ y así también que sea parsimonioso. Para esto se tomará los siguientes criterios:
+
+- Pruebas de hipótesis para los coeficientes
+- Menor Criterio de Información de Akaike AIC
+- Estimación de modelo restringido
+- Análisis de varianza ANOVA
+
+## Pruebas de hipótesis para los coeficientes
+
+Primero se estima el modelo con toda la información.
+
+```{r}
+mod<-lm(esp_vida~.,data=bd_esp_vida)
+summary(mod)
+```
+
+En el modelo lineal se tiene un coeficiente de determinación ajustado de $R_{a}^2=0.9641$, concluyendo que el modelo tiene una alta calidad. También se puede observar que se tiene un estadístico $F$ grande el cual rechaza la hipóstesis nula, teniendo así evidencia estadística para rechazar $H_0$.
+
+$$H_0: \beta_1=\beta_2=...=\beta_p=0$$
+$$H_1: \beta_j\neq0\;\text{    ; para algún }j=1,...,p$$ 
+
+Ahora  para cada uno de los coeficientes $\beta$ la prueba de hipótesis es la siguiente:
+
+$$H_0: \beta_j=0$$
+$$H_0: \beta_j\neq0$$
+Observando los p-valores existen covariables que no rechazan la hipótesis nula teniendo así evidencia estadística para decir que no son significativos, las cuales son: superficie, crecimiento del PIB, acceso a la electricidad, emisiones de $CO^2$ y emisiones de oxido nitroso.
+
+## Menor Criterio de Información de Akaike AIC
+
+Por otro lado el software R con la función `stepAIC()` realiza iteraciones combinando todos los modelos lineales posibles, tomando en cuenta el menor valor del Criterio de Información de Akaike (AIC).
+
+```{r}
+stepAIC(mod,trace = F)
+```
+
+Posterior de la búsqueda del menor AIC, se proporciona las siguientes variables explicativas: tasa de fertilidad, superficie, crecimiento del PIB, emisiones de metano, emisiones de oxido nitroso, gasto en educación y mortalidad.
+
+Tomando en cuenta las mismas se ajusta nuevamente el modelo.
+
+```{r}
+mod1<-lm(esp_vida ~ fertilidad + superficie + crecimiento_pib + metano + oxido_nitroso + 
+    gasto_educacion+mortalidad, data = bd_esp_vida)
+summary(mod1)
+```
+
+Aún persiste la no significancia del 5% de las variables superficie, crecimiento del PIB y oxido nitroso, eliminando las mismas se ajusta nuevamente el modelo.
+
+```{r}
+mod2<-lm(esp_vida ~ fertilidad + metano + gasto_educacion+mortalidad, data = bd_esp_vida)
+summary(mod2)
+```
+
+## Estimación del modelo restringido
+
+Resultando ahora no significativo a la covariable emisiones de metano. Antes de eliminar esta covariable se realizara una prueba de significancia para conjuntos de parámtros, en el primer modelo se tendra todas covariables del anterior modelo y se estimará otro modelo sin la variable de emisiones de metano.
+
+
+Las hipótesis de interés serán:
+
+$$H_0:\beta_{p-q+1}=\beta_{p-q+2}=...=\beta_p=0$$
+$$H_1: H_0 \text{ es falso}$$
+Entonces el estadístico de prueba será:
+
+$$F_c=\frac{(SCE_R-SCE)/q}{SCE/(n-p-1)}\sim F_{(q;n-p-1)}$$
+```{r}
+# Modelo Sin restringir
+mod2_1<-mod2
+summary(mod2_1)
+```
+
+```{r}
+# Modelo restringido
+mod2_2<-lm(esp_vida ~ fertilidad + gasto_educacion + mortalidad, data = bd_esp_vida)
+summary(mod2_2)
+```
+
+Entonces: $$SCE= S^2*(n-p-1)=(1.51)^2 *115=262.2115$$
+
+$$SCE_R= S^2*(n-p-1)=(1.522)^2 *116=268.7121$$
+
+Así $$F_c=\frac{(268.7121-262.2115)/1}{262.2115/115}=2.851015$$
+
+```{r}
+qf(0.95,1,115)
+```
+Así se tiene
+$$F_c=2.851015<3.923599=F_{(1-\alpha;1;115)}$$
+Así no se rechaza la hipótesis nula donde el $\beta_q=0$ que corresponde a la emisión del metano.
+
+```{r}
+pf(2.851015,1,115)
+```
+
+Para el valor-p es `r pf(2.851015,1,115)`$>0.05$, así no se rechaza la hipótesis nula.
+
+Por lo tanto se tiene evidencia estadística para decir que el $\beta_q=0$ correspondiente a la emisión del metano, no teniendo así significancia en el modelo y así se decide eliminanr el mismo para ajustar el nuevo modelo.
+
+```{r}
+mod2<-lm(esp_vida ~ fertilidad + gasto_educacion + mortalidad, data = bd_esp_vida)
+summary(mod2)
+```
+
+Finalmente se encuentra un modelo con covariables significativas que explican de manera óptima el modelo ya que se tiene un $R^2_{a}=0.961$. Por tanto el modelo será:
+
+$$Y_i=\beta_0+\beta_1X_{i1}+\beta_2 X_{i2}+\beta_3 X{i_3}+\varepsilon_i$$
+Donde:
+
+$Y_i:$ Esperanza de vida al nacer.  
+$X_{i1}:$ Tasa de fertilidad, total (nacimientos por cada mujer).  
+$X_{i2}:$ Gasto público en educación, total (% del PIB).  
+$X_{i3}:$ Tasa de mortalidad, adultos (por cada 1.000 adultos).
+
+El modelo estimado será:
+
+$$\text{Esp. vida}_i=85.63-1.73\text{ fertilidad}_i+0.34\text{ gasto educación}_i-0.06 \text{mortalidad}_i$$
+En la interpretación de los coeficientes se tiene:
+
+- Si la tasa de fertilidad aumenta en un punto se espera que la esperanza de vida al nacer disminuya en $1.73$ años aproximadamente, cuando las otras covariables son $0$.
+
+- Si el gasto público en educación aumenta en $1$% se espera que la esperanza de vida aumente en $0.34$ años aproximadamente, cuando las otras covariables son $0$.
+
+- Si la tasa de mortalidad aumenta en un punto se espera que la esperanza de vida al nacer disminuya en $0.06$ años aproximadamente, cuando las otras covariables son $0$.
+
+
+## Análisis de varianza ANOVA
+
+Para este modelo que posiblemente sea óptimo y parsimonioso, se realizará un análisis de varianza ANOVA.
+
+```{r}
+anova(mod2)
+```
+
+Se puede observar que para las covariables seleccionadas almenos una si explica de mejor manera a la esperanza de vida.
+
+# Análisis de residuos
+
+```{r }
+bd_mod<-bd_pob1 %>% 
+  dplyr::select(pais,codigo,esp_vida,fertilidad,gasto_educacion,mortalidad) %>% 
+  mutate(residuos=residuals(mod2),
+         residuos_student=rstudent(mod2),
+         ajustados=fitted(mod2))
+```
+Se realizará el análisis de residuos para verificar los supuestos de normalidad, para este cometido se utilizarán los residuos obtenidos por la regresión y así también los Studentizados.
+
+
+Primero se grafica la función de autocorrelación, el cual muestra que se asemeja al comportamiento de ruido blando vale decir media $0$ y varianza constante tanto en los residuos de la regresión como los studentizados.
+
+```{r}
+#Análisis de residuos
+par(mfrow=c(2,2))
+acf(bd_mod$residuos_student,main="FAC Residuos Studentizados")
+pacf(bd_mod$residuos_student,main="FACP Residuos Studentizados")
+acf(bd_mod$residuos,main="FAC Residuos")
+pacf(bd_mod$residuos,main="FACP Residuos")
+```
+
+## Supuesto de normalidad
+
+Se grafica el histograma de los residuos de la regresión y los studentizados, se observa que posiblemente tengan un comportamiento normal ya que los coeficientes estimados son significativamente iguales a $0$.
+
+```{r }
+#Normalidad
+par(mfrow=c(1,2))
+hist(bd_mod$residuos,main="Histograma de Residuos")
+hist(bd_mod$residuos_student,main="Histograma de Residuos Studentizados")
+```
+
+Se grafica el qq-plot, donde se puede observar que el diagrama es casi lineal lo cual muestra un posible comportamiento normal 
+
+```{r}
+grid.arrange(
+  ggplot(bd_mod)+
+    stat_qq(aes(sample=residuos))+
+    labs(title="Q-Q Plot (Residuos)",y="Residuos",x="Teóricos")
+  ,
+  ggplot(bd_mod)+
+    stat_qq(aes(sample=residuos_student))+
+    #geom_abline(color="blue")+
+    labs(title="Q-Q Plot (Residuos Studentizados)",y="Residuos Studentizados",x="Teóricos")
+  ,ncol=2
+)
+```
+
+Para tener evidencia estadística se realizará la dócima de Jarque-Bera para modelos de regresión.
+
+$$H_0:\text{residuos son normales}$$
+
+```{r}
+jb.norm.test(bd_mod$residuos)
+jb.norm.test(bd_mod$residuos_student)
+```
+
+Tanto para los residuos de la regresión como los studentizados el p-valor es mayor a $0.05$ teniendo evidencia estadística para no rechazar $H_0$, así los residuos son normales.
+
+## Supuestos de multicolinealidad
+
+Se muestra las correlaciones de las covariables, donde las variables más correlacionadas estan entre la tasa de fertilidad y la tasa de mortalidad.
+
+```{r}
+cor(bd_mod[,4:6])
+```
+
+Se construirá regresiones auxiliares, para determinar la significancia entre ellas.
+
+Si tenemos la tasa de fertilidad como variable respuesta, se tiene que la tasa de mortalidad es significativa para el modelo, pero su $R^2_a=0.5198$ lo cual indica que tiene un ajuste relativamente bajo.
+
+```{r}
+mod_aux1<-lm(fertilidad ~ gasto_educacion+mortalidad,bd_mod)
+summary(mod_aux1)
+```
+
+Si tenemos el gasto público en educación (% PIB) como variable respuesta, se tiene que la tasa de fertilidad es significativa para el modelo, pero su $R^2_a=0.0.03317$ lo cual indica que tiene un ajuste bajo.
+
+```{r}
+mod_aux2<-lm(gasto_educacion~ fertilidad +mortalidad ,bd_mod)
+summary(mod_aux2)
+```
+
+Si tenemos la tasa de mortalidad como variable respuesta, se tiene que la tasa de fertilidad es significativa para el modelo, pero su $R^2_a=0.5036$ lo cual indica que tiene un ajuste relativamente bajo.
+
+```{r}
+mod_aux3<-lm(mortalidad~ fertilidad +gasto_educacion,bd_mod)
+summary(mod_aux3)
+```
+
+Para determinar también la multicolinealidad se utilizará el factor de inflación de la varianza.
+
+$$VIF=\frac{1}{1-R^2_j}\hspace{1cm};j=1,2,3$$
+
+donde el $R^2_j$ es el coeficiente de determinación de las regresiones auxiliares.
+
+```{r}
+r1<-summary(mod_aux1);1/(1-r1$r.squared)
+r2<-summary(mod_aux2);1/(1-r2$r.squared)
+r3<-summary(mod_aux3);1/(1-r3$r.squared)
+```
+
+El software R también tiene la función `vif()` que calcula el $VIF$
+
+```{r}
+car::vif(mod2)
+```
+
+En todos los casos el $VIF<10$ lo que indica que no existe multicolinealidad entre las covariables.
+
+## Supuesto de homocedasticidad
+
+Primero se hará un análisis gráfico:
+
+```{r}
+#Homocedasticidad
+grid.arrange(
+  ggplot(bd_mod,aes(ajustados,residuos))+
+    geom_point()
+  ,
+    ggplot(bd_mod,aes(ajustados,residuos_student))+
+    geom_point(),
+ncol=2)
+```
+
+Ahora se utilizara el contraste de Breuch-Pagan, donde la hipótesis son:
+
+$$H_0: \text{Errores son homocedasticos}$$
+$$H_0: \text{Errores son heterocedasticos}$$
+
+```{r }
+mod_res<-lm(residuos^2~ fertilidad + gasto_educacion + mortalidad, data = bd_mod)
+
+estadistico<-nrow(bd_mod)*summary(mod_res)$r.squared
+valorp<-pchisq(estadistico,df=3,lower.tail = F)
+cbind(estadistico,valorp)
+
+bptest(mod2)
+```
+
+El p-valor es mayor que $0.05$ con lo cual existe evidencia estadística para no rechazar la hipótesis nula, vale decir que los errores son homocedásticos.
+
+## Supuesto de autocorrelación
+
+Se gráfica los residuos de la regresión y los residuos studentizados, los cuales no siguen un patron sistemático lo cual mostraria que no son correlacionados.
+
+```{r}
+grid.arrange(
+  bd_mod %>% 
+    ggplot(aes(x=c(1:nrow(.)),y=residuos))+
+      geom_point()+
+      #geom_line(color="blue")+
+      geom_hline(yintercept = 0)+
+      labs(title="Autocorrelación de Residuos",
+           y="Residuos",
+           x="Números ordenados"),
+  bd_mod %>% 
+    ggplot(aes(x=c(1:nrow(.)),y=residuos_student))+
+      geom_point()+
+      #geom_line(color="blue")+
+      geom_hline(yintercept = 0)+
+      labs(title="Autocorrelación de Residuos Studentizados",
+           y="Residuos",
+           x="Números ordenados")
+  ,ncol=2)
+```
+
+Se utilizará ahora el contraste de Durbin Watson, que tiene las siguientes hipótesis:
+
+$$H_0:\phi=0 \text{  (no existe autocorrelación)}$$
+
+$$H_1:\phi\neq0 \text{  (existe autocorrelación)}$$
+
+```{r}
+dwtest(mod2)
+```
+
+El $DW=2.0115$ y el p-valor es mayor a $0.05$, con lo cual no rechazamos la hipótesis nula así tenemos evidencia estadística para decir que no existe autocorrelación de grado $1$ en los residuos.
+
+Ahora se utilizará ahora el contraste de Breuch Godfrey, que tiene las siguientes hipótesis:
+
+$$H_0: \varepsilon_i\sim N(0,\sigma^2) \; \text{son ruido blanco}$$
+$$H_1: \varepsilon_i \text{ es un proceso } AR(p)$$
+
+```{r}
+bgtest(mod2)
+```
+
+El p-valor es mayor a $0.05$, con lo cual no rechazamos la hipótesis nula así tenemos evidencia estadística para decir que no existe autocorrelación de grado $p$ en los residuos.
+
+# Predicción
+
+Como el modelo 
+
+$$\text{Esp. vida}_i=85.63-1.73\text{ fertilidad}_i+0.34\text{ gasto educación}_i-0.06 \text{mortalidad}_i$$
+
+cumplió todos los supuestos podemos pasar a realizar las predicciones, como los respectivos intervalos de confianza, para los siguientes datos.
+
+$$\text{Esp. vida}_i=85.63-1.73 (3)_i+0.34 (10)-0.06 (100)$$
+
+```{r}
+x0<-data.frame(fertilidad=3,gasto_educacion=10,mortalidad=100)
+predict(mod2,x0,interval = "confidence")
+```
+
+Se espera que cuando tenemos una tasa de fertilidad de $3$, un gasto en educación en porcentajes del PIB del $10$% y una tasa de mortalidad de $100$ cada $1000$ adultos, la esperanza de vida de un país será de $77.52$ años de vida, que puede variar entre $76.37$ a $78.67$ años según el valor medio de las predicciones.
+
+
+```{r}
+predict(mod2,x0,interval = "prediction")
+```
+
+Se espera que cuando tenemos una tasa de fertilidad de $3$, un gasto en educación en porcentajes del PIB del $10$% y una tasa de mortalidad de $100$ cada $1000$ adultos, la esperanza de vida de un país será de $77.52$ años de vida, que puede variar entre $74.29$ a $80.74$ años para el valor de la predicción.
+
+Ahora se genera diferentes valores para ver el comportamiento de las predicciones.
+
+```{r}
+x<-data.frame(fertilidad=c(1,5),gasto_educacion=c(10,2),mortalidad=c(20,50))
+predict(mod2,x,interval="confidence")
+predict(mod2,x,interval="prediction")
+```
+
+La esperanza de vida al nacer sea mayor si tiene una tasa de fertilidad y mortalidad baja, y un gasto en educación alto. Mientras que la esperanza de vida sera menor si pasa lo contrario a lo mencionado anteriormente.
+
+# Conclusiones
+
+En este trabajo se estudio el comportamiento de la variable de respuesta esperanza de vida al nacer teniendo en un principio diez covariables obtenidas de diferentes paises del mundo con datos oficiales del Banco Mundial, de las cuales en la búsqueda del modelo lineal múltiple óptimo se determino que existen tres variables significativas para la variable de respuesta los cuales son: 
+
+- Tasa de mortalidad, adultos (por cada 1.000 adultos)  
+- Tasa de fertilidad, total (nacimientos por cada mujer)  
+- Gasto público en educación, total (% del PIB)  
+
+El modelo ajustado con estas tres covariables tiene un coeficiente de determinación ajustado de $0.961$, lo cual indica la calidad del modelo. 
+
+Posteriormente se hizo la validación del modelo realizando pruebas visuales y estadísticas para verificar los supuestos de normalidad, multicolinealidad, homocedasticidad y autocorrelación de los residuos estimados por la regresión y los residuos studentizados, donde se cumplieron todos los supuestos.
+
+Finalmente se realizaron predicciones bajo el modelo de regresión, donde cualquier país puede trabajar en aumentar o reducir estas covariables para tener una esperanza de vida al nacer alta o baja, mostrando así que si se quiere aumentar el indicador se deberia reducir lo más posible la tasa de fertilidad y mortalidad y aumentar el porcentaje de gasto público en educación con respecto al porcentaje del PIB.
+
+Es necesario mencionar que la variable de respuesta tiene soporte positivo y en la gráfica del histograma tenia una cierta asimetría sesgada a la derecha, donde también existen datos atípicos para tal efecto se recomendaría indagar en modelos asimétricos, para verificar si se tiene un mejor ajuste y así una más confiable predicción.
+
+
+
+
